@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
 import fondo from '../assets/Fondo.png';
 // Imágenes Juego 2
 import fresa from '../assets/juego1/fresa.png'; // Fresa no está en juego2, usaremos de juego1 o eliminamos si no se quiere
@@ -41,7 +42,8 @@ const JuegoAtrapaFruta = ({ onVolver, usuario }) => {
     const iniciarJuego = (nivel) => {
         setDificultad(nivel);
         setPuntuacion(0);
-        setTiempo(60);
+        setPuntuacion(0);
+        setTiempo(35);
         gameState.current = {
             canastaX: 50,
             objetos: [],
@@ -161,6 +163,20 @@ const JuegoAtrapaFruta = ({ onVolver, usuario }) => {
         const timerId = setInterval(() => {
             setTiempo(t => {
                 if (t <= 1) {
+
+                    // Guardar resultado
+                    if (usuario && usuario.codigo) {
+                        const difNombre = dificultad.charAt(0).toUpperCase() + dificultad.slice(1);
+                        // Usamos 'Atrapar' como nombre del juego basado en JSON ejemplo
+                        axios.post('http://localhost:3000/api/guardar-resultado', {
+                            codigo: usuario.codigo,
+                            juego: 'Atrapar',
+                            dificultad: difNombre,
+                            puntuacion: puntuacion,
+                            tiempo_jugado: 60 - t
+                        }).catch(err => console.error("Error guardando resultado:", err));
+                    }
+
                     setEtapa('resumen');
                     return 0;
                 }

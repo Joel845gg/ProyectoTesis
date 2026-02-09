@@ -31,6 +31,8 @@ const SelectorJuego = ({ usuario, onVolver, onSeleccionarJuego }) => {
     // ...
 
     // En App.jsx se manejará la redirección
+
+    // En App.jsx se manejará la redirección
     const handleJugar = () => {
         onSeleccionarJuego(juegoActual.id);
     };
@@ -200,6 +202,8 @@ const SelectorJuego = ({ usuario, onVolver, onSeleccionarJuego }) => {
                 Salir
             </button>
 
+
+
             <style>{`
         .arrow-btn:hover {
           transform: scale(1.2);
@@ -226,7 +230,7 @@ const SelectorJuego = ({ usuario, onVolver, onSeleccionarJuego }) => {
             animation: popIn 0.5s ease-out, float 4s ease-in-out infinite;
         }
       `}</style>
-        </div>
+        </div >
     );
 };
 

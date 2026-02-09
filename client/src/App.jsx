@@ -9,6 +9,7 @@ import JuegoMemoria from './components/JuegoMemoria';
 import JuegoAtrapaFruta from './components/JuegoAtrapaFruta';
 import JuegoTopo from './components/JuegoTopo';
 import JuegoPalabra from './components/JuegoPalabra';
+import AdminDashboard from './components/AdminDashboard';
 
 
 function App() {
@@ -41,7 +42,11 @@ function App() {
           onVolver={() => setPantalla('opciones')}
           onIngresoExitoso={(user) => {
             setUsuario(user);
-            setPantalla('selector');
+            if (user.isAdmin) {
+              setPantalla('admin');
+            } else {
+              setPantalla('selector');
+            }
           }}
         />
       )}
@@ -49,6 +54,15 @@ function App() {
       {pantalla === 'recuperar' && (
         <RecuperarCodigo
           onVolver={() => setPantalla('opciones')}
+        />
+      )}
+
+      {pantalla === 'admin' && (
+        <AdminDashboard
+          onVolver={() => {
+            setUsuario(null);
+            setPantalla('menu');
+          }}
         />
       )}
 

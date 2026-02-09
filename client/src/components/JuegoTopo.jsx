@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
 import fondo from '../assets/Fondo.png';
 import topoImg from '../assets/juego3/topo.png';
 import { playSound } from '../utils/sound';
@@ -32,7 +33,8 @@ const JuegoTopo = ({ onVolver, usuario }) => {
         setDificultad(nivel);
         setGridSize(conf.size);
         setPuntuacion(0);
-        setTiempo(60);
+        setPuntuacion(0);
+        setTiempo(35);
         setEtapa('jugando');
 
         // Inicializar grid vacío
@@ -55,6 +57,26 @@ const JuegoTopo = ({ onVolver, usuario }) => {
         timerRef.current = setInterval(() => {
             setTiempo(prev => {
                 if (prev <= 1) {
+
+                    // Guardar resultado
+                    if (usuario && usuario.codigo) {
+                        // Puntuación máxima posible aprox: 60 seg / 1 seg por topo * 10 pts = 600? 
+                        // No hay maximo claro, es acumulativo.
+                        // Tiempo jugado es fijo 60s si llega al final.
+
+                        const conf = config[dificultad];
+                        // Ajustar nombre dificultad
+                        const difNombre = dificultad.charAt(0).toUpperCase() + dificultad.slice(1);
+
+                        axios.post('http://localhost:3000/api/guardar-resultado', {
+                            codigo: usuario.codigo,
+                            juego: 'Topo',
+                            dificultad: difNombre,
+                            puntuacion: puntuacion,
+                            tiempo_jugado: 60 - prev // Deberia ser casi 60
+                        }).catch(err => console.error("Error guardando resultado:", err));
+                    }
+
                     setEtapa('resumen');
                     return 0;
                 }

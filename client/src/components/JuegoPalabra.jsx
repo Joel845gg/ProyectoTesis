@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import fondo from '../assets/Fondo.png';
 import { playSound } from '../utils/sound';
 
@@ -104,6 +105,18 @@ const JuegoPalabra = ({ onVolver, usuario }) => {
             interval = setInterval(() => {
                 setTiempo((prev) => {
                     if (prev <= 1) {
+
+                        // Guardar resultado cuando se acaba el tiempo
+                        if (usuario && usuario.codigo) {
+                            axios.post('http://localhost:3000/api/guardar-resultado', {
+                                codigo: usuario.codigo,
+                                juego: 'Completar',
+                                dificultad: dificultad.charAt(0).toUpperCase() + dificultad.slice(1),
+                                puntuacion: puntuacion,
+                                tiempo_jugado: 35 - prev // Tiempo total (35) menos restante
+                            }).catch(err => console.error("Error guardando resultado:", err));
+                        }
+
                         setEtapa('ganaste'); // Reutilizamos pantalla final
                         return 0;
                     }

@@ -8,6 +8,9 @@ const client = new Client({
     port: 5432,
 });
 
+const fs = require('fs');
+const path = require('path');
+
 async function setupQuery() {
     try {
         await client.connect();
@@ -34,18 +37,16 @@ async function setupQuery() {
 
         await dbClient.connect();
 
-        console.log("Creando tabla 'usuarios'...");
-        await dbClient.query(`
-      CREATE TABLE IF NOT EXISTS usuarios (
-        id SERIAL PRIMARY KEY,
-        nombre VARCHAR(100) NOT NULL,
-        apellido VARCHAR(100) NOT NULL,
-        codigo VARCHAR(4) UNIQUE NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
+        console.log("Ejecutando script de base de datos...");
 
-        console.log("Base de datos configurada exitosamente.");
+        // Read the SQL file
+        const sqlPath = path.join(__dirname, '../client/src/assets/bdd/jugadores.sql');
+        const sql = fs.readFileSync(sqlPath, 'utf8');
+
+        // Execute the SQL
+        await dbClient.query(sql);
+
+        console.log("Base de datos y datos iniciales configurados exitosamente.");
         await dbClient.end();
     } catch (err) {
         console.error('Error configurando la base de datos:', err);

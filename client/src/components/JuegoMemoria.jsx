@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import fondo from '../assets/Fondo.png';
 import backCard from '../assets/juego1/back.png';
 import { playSound } from '../utils/sound';
@@ -21,6 +22,7 @@ const JuegoMemoria = ({ onVolver, usuario }) => {
     const [cartasVolteadas, setCartasVolteadas] = useState([]);
     const [parejasEncontradas, setParejasEncontradas] = useState([]);
     const [intentos, setIntentos] = useState(0);
+    const [tiempoInicio, setTiempoInicio] = useState(0);
 
     const
         imagenes = [fresa, kiwi, coco, sandia, naranja, pera, platano, manzana, cereza];
@@ -32,12 +34,14 @@ const JuegoMemoria = ({ onVolver, usuario }) => {
         dificil: { pares: 9, cols: 6 }
     };
 
+    const [tiempo, setTiempo] = useState(35); // 35 segundos límite
+    const timerRef = React.useRef(null);
+
     const iniciarJuego = (nivel) => {
         setDificultad(nivel);
         const numPares = config[nivel].pares;
         const imagenesSeleccionadas = imagenes.slice(0, numPares);
 
-        // Duplicar y barajar
         const cartasBarajadas = [...imagenesSeleccionadas, ...imagenesSeleccionadas]
             .sort(() => Math.random() - 0.5)
             .map((img, index) => ({ id: index, img, estado: 'oculta' }));
@@ -46,10 +50,41 @@ const JuegoMemoria = ({ onVolver, usuario }) => {
         setCartasVolteadas([]);
         setParejasEncontradas([]);
         setIntentos(0);
+        setTiempo(35);
         setEtapa('jugando');
+
+        // Iniciar Timer
+        if (timerRef.current) clearInterval(timerRef.current);
+        timerRef.current = setInterval(() => {
+            setTiempo((prev) => {
+                if (prev <= 1) {
+                    clearInterval(timerRef.current);
+                    finalizarJuego(false, 35); // Tiempo agotado
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+    };
+
+    const finalizarJuego = (completado, tiempoJugado) => {
+        if (timerRef.current) clearInterval(timerRef.current);
+
+        if (usuario && usuario.codigo) {
+            axios.post('http://localhost:3000/api/guardar-resultado', {
+                codigo: usuario.codigo,
+                juego: 'Parejas',
+                dificultad: dificultad.charAt(0).toUpperCase() + dificultad.slice(1),
+                puntuacion: completado ? (1000 - (intentos * 10)) : (parejasEncontradas.length * 50), // Puntos parciales si pierde
+                tiempo_jugado: tiempoJugado
+            }).catch(err => console.error("Error guardando resultado:", err));
+        }
+        setTimeout(() => setEtapa('resumen'), 1000);
     };
 
     const manejarClickCarta = (carta) => {
+        if (etapa !== 'jugando') return;
+
         if (
             cartasVolteadas.length === 2 ||
             cartasVolteadas.some(c => c.id === carta.id) ||
@@ -62,8 +97,15 @@ const JuegoMemoria = ({ onVolver, usuario }) => {
         if (nuevasVolteadas.length === 2) {
             setIntentos(prev => prev + 1);
             if (nuevasVolteadas[0].img === nuevasVolteadas[1].img) {
-                setParejasEncontradas([...parejasEncontradas, carta.img]);
+                const nuevasParejas = [...parejasEncontradas, carta.img];
+                setParejasEncontradas(nuevasParejas);
                 setCartasVolteadas([]);
+
+                // Verificar Victoria
+                if (nuevasParejas.length === config[dificultad].pares) {
+                    clearInterval(timerRef.current);
+                    finalizarJuego(true, 35 - tiempo); // Tiempo que tardó
+                }
             } else {
                 setTimeout(() => {
                     setCartasVolteadas([]);
@@ -73,10 +115,10 @@ const JuegoMemoria = ({ onVolver, usuario }) => {
     };
 
     useEffect(() => {
-        if (dificultad && parejasEncontradas.length === config[dificultad].pares) {
-            setTimeout(() => setEtapa('resumen'), 1000);
-        }
-    }, [parejasEncontradas, dificultad]);
+        return () => {
+            if (timerRef.current) clearInterval(timerRef.current);
+        };
+    }, []);
 
     // Pantalla de Selección
     if (etapa === 'seleccion') {
@@ -204,6 +246,7 @@ const JuegoMemoria = ({ onVolver, usuario }) => {
                 zIndex: 100
             }}>
                 <h2 style={{ color: '#333', margin: 0, fontSize: '1.8rem' }}>Intentos: {intentos}</h2>
+                <h2 style={{ color: tiempo < 10 ? '#f44336' : '#333', margin: 0, fontSize: '1.8rem' }}>Tiempo: {tiempo}s</h2>
                 <button
                     onClick={() => { playSound('click'); setEtapa('seleccion'); }}
                     onMouseEnter={() => playSound('hover')}

@@ -36,11 +36,16 @@ const IngresoCodigo = ({ onVolver, onIngresoExitoso }) => {
             const data = await response.json();
 
             if (response.ok) {
-                setSaludo(`¡Hola ${data.nombre} ${data.apellido}!`);
+                if (data.isAdmin) {
+                    setSaludo(`Bienvenido ${data.nombre}`);
+                } else {
+                    setSaludo(`¡Hola ${data.nombre} ${data.apellido}!`);
+                }
+
                 // Pausa para mostrar el saludo antes de navegar
                 setTimeout(() => {
                     onIngresoExitoso(data);
-                }, 2000);
+                }, 1500);
             } else {
                 setError(data.error || 'Código incorrecto');
                 setLoading(false);
@@ -69,10 +74,10 @@ const IngresoCodigo = ({ onVolver, onIngresoExitoso }) => {
 
                 <input
                     type="text"
-                    placeholder="Código de 4 dígitos"
+                    placeholder="Código o 'admin'"
                     value={codigo}
                     onChange={(e) => setCodigo(e.target.value)}
-                    maxLength={4}
+                    maxLength={10}
                     required
                     style={{ textAlign: 'center', letterSpacing: '5px', fontSize: '1.5rem' }}
                 />
