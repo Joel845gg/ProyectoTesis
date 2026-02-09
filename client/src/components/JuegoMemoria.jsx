@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import fondo from '../assets/Fondo.png';
+import fondo from '../assets/EncuentraPareja.png';
 import backCard from '../assets/juego1/back.png';
 import { playSound } from '../utils/sound';
 
@@ -76,7 +76,8 @@ const JuegoMemoria = ({ onVolver, usuario }) => {
                 juego: 'Parejas',
                 dificultad: dificultad.charAt(0).toUpperCase() + dificultad.slice(1),
                 puntuacion: completado ? (1000 - (intentos * 10)) : (parejasEncontradas.length * 50), // Puntos parciales si pierde
-                tiempo_jugado: tiempoJugado
+                tiempo_jugado: tiempoJugado,
+                errores: intentos // En memoria, los intentos cuentan como "fallos" o esfuerzo
             }).catch(err => console.error("Error guardando resultado:", err));
         }
         setTimeout(() => setEtapa('resumen'), 1000);

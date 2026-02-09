@@ -1,8 +1,7 @@
 const express = require('express');
-const cors = require('cors');
 const { Pool } = require('pg');
+const cors = require('cors');
 const bodyParser = require('body-parser');
-require('dotenv').config();
 
 const app = express();
 const port = 3000;
@@ -11,7 +10,7 @@ const port = 3000;
 app.use(cors());
 app.use(bodyParser.json());
 
-// Database connection
+// Configuración de PostgreSQL
 const pool = new Pool({
     user: 'postgres',
     host: 'localhost',
@@ -20,12 +19,10 @@ const pool = new Pool({
     port: 5432,
 });
 
-// Helper function to generate 4-digit code
+// Función para generar código único
 function generateCode() {
     return Math.floor(1000 + Math.random() * 9000).toString();
 }
-
-// Routes
 
 // Registro de usuario
 app.post('/api/registro', async (req, res) => {
@@ -36,9 +33,9 @@ app.post('/api/registro', async (req, res) => {
     }
 
     try {
-        // 1. Validar duplicados
+        // 1. Validar duplicados en tabla JUGADORES
         const checkDuplicate = await pool.query(
-            'SELECT * FROM usuarios WHERE LOWER(nombre) = LOWER($1) AND LOWER(apellido) = LOWER($2)',
+            'SELECT * FROM jugadores WHERE LOWER(nombre) = LOWER($1) AND LOWER(apellido) = LOWER($2)',
             [nombre, apellido]
         );
 
@@ -53,7 +50,7 @@ app.post('/api/registro', async (req, res) => {
         // Intentar generar un código único hasta 5 veces
         for (let i = 0; i < 5; i++) {
             codigo = generateCode();
-            const checkRes = await pool.query('SELECT 1 FROM usuarios WHERE codigo = $1', [codigo]);
+            const checkRes = await pool.query('SELECT 1 FROM jugadores WHERE codigo = $1', [codigo]);
             if (checkRes.rowCount === 0) {
                 isUnique = true;
                 break;
@@ -64,17 +61,16 @@ app.post('/api/registro', async (req, res) => {
             return res.status(500).json({ error: 'No se pudo generar un código único. Inténtalo de nuevo.' });
         }
 
-        const estadisticas = {
-            mejor_puntuacion_global: 0,
-            puntuacion_total: 0,
-            total_juegos_jugados: 0
-        };
-        const historial_juegos = [];
-        const mejores_puntuaciones = {};
-
+        // 3. Insertar en tabla JUGADORES
         const result = await pool.query(
-            'INSERT INTO usuarios (nombre, apellido, codigo, estadisticas, historial_juegos, mejores_puntuaciones) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-            [nombre, apellido, codigo, estadisticas, JSON.stringify(historial_juegos), mejores_puntuaciones]
+            'INSERT INTO jugadores (codigo, nombre, apellido, fecha_registro) VALUES ($1, $2, $3, NOW()) RETURNING *',
+            [codigo, nombre, apellido]
+        );
+
+        // 4. Inicializar ESTADISTICAS en 0
+        await pool.query(
+            'INSERT INTO estadisticas (jugador_codigo, mejor_puntuacion_global, puntuacion_total, total_juegos_jugados) VALUES ($1, 0, 0, 0)',
+            [codigo]
         );
 
         res.status(201).json(result.rows[0]);
@@ -84,30 +80,32 @@ app.post('/api/registro', async (req, res) => {
     }
 });
 
-// Ingreso por código
+// Login (Validar código)
 app.post('/api/login', async (req, res) => {
     const { codigo } = req.body;
 
     if (!codigo) {
-        return res.status(400).json({ error: 'Código requerido' });
-    }
-
-    if (codigo === 'admin') {
-        return res.json({
-            codigo: 'admin',
-            nombre: 'Administrador',
-            apellido: '',
-            isAdmin: true
-        });
+        return res.status(400).json({ error: 'Código es requerido' });
     }
 
     try {
+        // Verificar si es el código especial de admin
+        if (codigo.toLowerCase() === 'admin') {
+            return res.json({
+                codigo: 'admin',
+                nombre: 'Administrador',
+                apellido: 'Sistema',
+                isAdmin: true
+            });
+        }
+
+        // Si no es admin, buscar en la base de datos
         const result = await pool.query('SELECT * FROM jugadores WHERE codigo = $1', [codigo]);
 
         if (result.rows.length > 0) {
-            res.json(result.rows[0]);
+            res.json({ ...result.rows[0], isAdmin: false });
         } else {
-            res.status(404).json({ error: 'Usuario no encontrado' });
+            res.status(404).json({ error: 'Código no encontrado' });
         }
     } catch (err) {
         console.error(err);
@@ -120,10 +118,12 @@ app.get('/api/admin/stats', async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT j.codigo, j.nombre, j.apellido, 
-                   e.mejor_puntuacion_global, e.puntuacion_total, e.total_juegos_jugados 
+                   COALESCE(e.mejor_puntuacion_global, 0) as mejor_puntuacion_global, 
+                   COALESCE(e.puntuacion_total, 0) as puntuacion_total, 
+                   COALESCE(e.total_juegos_jugados, 0) as total_juegos_jugados 
             FROM jugadores j
             LEFT JOIN estadisticas e ON j.codigo = e.jugador_codigo
-            ORDER BY e.mejor_puntuacion_global DESC
+            ORDER BY e.mejor_puntuacion_global DESC NULLS LAST
         `);
         res.json(result.rows);
     } catch (err) {
@@ -132,64 +132,98 @@ app.get('/api/admin/stats', async (req, res) => {
     }
 });
 
+// Endpoint Admin: Analytics Detallado (Evolución)
+app.get('/api/admin/analytics/:codigo', async (req, res) => {
+    const { codigo } = req.params;
+    try {
+        // Obtener historial completo ordenado por fecha
+        const historyRes = await pool.query(`
+            SELECT juego, dificultad, puntuacion, errores, tiempo_jugado, fecha 
+            FROM historial_juegos 
+            WHERE jugador_codigo = $1 
+            ORDER BY fecha ASC
+        `, [codigo]);
 
+        res.json(historyRes.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Error obteniendo analytics' });
+    }
+});
+
+// Endpoint: Obtener todos los jugadores con evaluaciones pre/post
+app.get('/api/admin/prepost/jugadores', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT 
+                pj.codigo,
+                pj.nombre,
+                ei.atencion as atencion_inicial,
+                ei.memoria as memoria_inicial,
+                ei.reaccion as reaccion_inicial,
+                ef.atencion as atencion_final,
+                ef.memoria as memoria_final,
+                ef.reaccion as reaccion_final,
+                m.atencion as mejora_atencion,
+                m.memoria as mejora_memoria,
+                m.reaccion as mejora_reaccion
+            FROM prepost_jugadores pj
+            LEFT JOIN prepost_evaluaciones ei ON pj.codigo = ei.jugador_codigo AND ei.tipo = 'inicial'
+            LEFT JOIN prepost_evaluaciones ef ON pj.codigo = ef.jugador_codigo AND ef.tipo = 'final'
+            LEFT JOIN prepost_mejoras m ON pj.codigo = m.jugador_codigo
+            ORDER BY pj.nombre
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Error obteniendo datos pre/post' });
+    }
+});
+
+// Endpoint: Obtener estadísticas agregadas pre/post
+app.get('/api/admin/prepost/stats', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT 
+                AVG(ei.atencion) as promedio_atencion_inicial,
+                AVG(ef.atencion) as promedio_atencion_final,
+                AVG(ei.memoria) as promedio_memoria_inicial,
+                AVG(ef.memoria) as promedio_memoria_final,
+                AVG(ei.reaccion) as promedio_reaccion_inicial,
+                AVG(ef.reaccion) as promedio_reaccion_final,
+                AVG(m.atencion) as promedio_mejora_atencion,
+                AVG(m.memoria) as promedio_mejora_memoria,
+                AVG(m.reaccion) as promedio_mejora_reaccion
+            FROM prepost_jugadores pj
+            LEFT JOIN prepost_evaluaciones ei ON pj.codigo = ei.jugador_codigo AND ei.tipo = 'inicial'
+            LEFT JOIN prepost_evaluaciones ef ON pj.codigo = ef.jugador_codigo AND ef.tipo = 'final'
+            LEFT JOIN prepost_mejoras m ON pj.codigo = m.jugador_codigo
+        `);
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Error obteniendo estadísticas pre/post' });
+    }
+});
 
 // Guardar resultado de juego
 app.post('/api/guardar-resultado', async (req, res) => {
-    const { codigo, juego, dificultad, puntuacion, tiempo_jugado } = req.body;
-    console.log(`[POST /api/guardar-resultado] Received:`, { codigo, juego, dificultad, puntuacion });
+    const { codigo, juego, dificultad, puntuacion, tiempo_jugado, errores } = req.body;
+    console.log(`[POST /api/guardar-resultado] Received:`, { codigo, juego, dificultad, puntuacion, errores });
 
     if (!codigo || !juego || !dificultad) {
         return res.status(400).json({ error: 'Faltan datos requeridos' });
     }
 
     try {
-        // 1. Buscar en 'usuarios' (Modelo JSON)
-        const userRes = await pool.query('SELECT * FROM usuarios WHERE codigo = $1', [codigo]);
-        if (userRes.rowCount > 0) {
-            console.log(`User ${codigo} found in 'usuarios' table.`);
-            const usuario = userRes.rows[0];
-            let estadisticas = usuario.estadisticas || { mejor_puntuacion_global: 0, puntuacion_total: 0, total_juegos_jugados: 0 };
-            let historial = usuario.historial_juegos || [];
-            let mejores = usuario.mejores_puntuaciones || {};
-
-            const nuevoJuego = {
-                juego,
-                dificultad,
-                puntuacion: parseFloat(puntuacion),
-                tiempo_jugado: parseFloat(tiempo_jugado),
-                fecha: new Date().toISOString()
-            };
-            historial.push(nuevoJuego);
-
-            const keyMejor = `${juego}_${dificultad}`;
-            if (!mejores[keyMejor] || parseFloat(puntuacion) > parseFloat(mejores[keyMejor])) {
-                mejores[keyMejor] = parseFloat(puntuacion);
-            }
-
-            estadisticas.total_juegos_jugados = (estadisticas.total_juegos_jugados || 0) + 1;
-            estadisticas.puntuacion_total = (estadisticas.puntuacion_total || 0) + parseFloat(puntuacion);
-
-            // Recalcular mejor global
-            const currentBest = estadisticas.mejor_puntuacion_global || 0;
-            estadisticas.mejor_puntuacion_global = Math.max(currentBest, parseFloat(puntuacion));
-
-            await pool.query(
-                'UPDATE usuarios SET estadisticas = $1, historial_juegos = $2, mejores_puntuaciones = $3 WHERE codigo = $4',
-                [estadisticas, JSON.stringify(historial), mejores, codigo]
-            );
-            return res.json({ message: 'Resultado guardado (usuarios)', stats: estadisticas });
-        }
-
-        // 2. Buscar en 'jugadores' (Modelo Relacional)
+        // Buscar en 'jugadores' (Modelo Relacional Único)
         const playerRes = await pool.query('SELECT * FROM jugadores WHERE codigo = $1', [codigo]);
         if (playerRes.rowCount > 0) {
-            console.log(`User ${codigo} found in 'jugadores' table.`);
 
-            // a. Insertar en historial_juegos
+            // a. Insertar en historial_juegos (Ahora con errores)
             await pool.query(
-                'INSERT INTO historial_juegos (jugador_codigo, juego, dificultad, puntuacion, tiempo_jugado, fecha) VALUES ($1, $2, $3, $4, $5, NOW())',
-                [codigo, juego, dificultad, puntuacion, tiempo_jugado]
+                'INSERT INTO historial_juegos (jugador_codigo, juego, dificultad, puntuacion, tiempo_jugado, errores, fecha) VALUES ($1, $2, $3, $4, $5, $6, NOW())',
+                [codigo, juego, dificultad, puntuacion, tiempo_jugado || 0, errores || 0]
             );
 
             // b. Actualizar o Insertar mejores_puntuaciones ("Max score for this game/diff")
@@ -216,7 +250,7 @@ app.post('/api/guardar-resultado', async (req, res) => {
             // Primero verificamos si existe registro en estadisticas
             let statsRow = await pool.query('SELECT * FROM estadisticas WHERE jugador_codigo = $1', [codigo]);
             if (statsRow.rowCount === 0) {
-                // Crear fila inicial si no existe
+                // Crear fila inicial si no existe (aunque debió crearse al registro)
                 await pool.query('INSERT INTO estadisticas (jugador_codigo, mejor_puntuacion_global, puntuacion_total, total_juegos_jugados) VALUES ($1, 0, 0, 0)', [codigo]);
                 statsRow = await pool.query('SELECT * FROM estadisticas WHERE jugador_codigo = $1', [codigo]);
             }
@@ -231,7 +265,7 @@ app.post('/api/guardar-resultado', async (req, res) => {
                 [newTotal, newCount, newGlobalBest, codigo]
             );
 
-            return res.json({ message: 'Resultado guardado (jugadores)' });
+            return res.json({ message: 'Resultado guardado correctamente' });
         }
 
         res.status(404).json({ error: 'Usuario no encontrado' });
@@ -242,17 +276,11 @@ app.post('/api/guardar-resultado', async (req, res) => {
     }
 });
 
-// Obtener usuario completo (Unificando tablas)
+// Obtener usuario completo (con estadísticas e historial)
 app.get('/api/usuario/:codigo', async (req, res) => {
     const { codigo } = req.params;
     try {
-        // 1. Buscar en tabla 'usuarios' (Nuevos registros con JSON)
-        const userRes = await pool.query('SELECT * FROM usuarios WHERE codigo = $1', [codigo]);
-        if (userRes.rows.length > 0) {
-            return res.json(userRes.rows[0]);
-        }
-
-        // 2. Buscar en tabla 'jugadores' (Datos semilla / Relacional)
+        // Buscar en tabla 'jugadores'
         const playerRes = await pool.query('SELECT * FROM jugadores WHERE codigo = $1', [codigo]);
         if (playerRes.rows.length > 0) {
             const player = playerRes.rows[0];
@@ -261,8 +289,7 @@ app.get('/api/usuario/:codigo', async (req, res) => {
             const statsRes = await pool.query('SELECT * FROM estadisticas WHERE jugador_codigo = $1', [codigo]);
             const stats = statsRes.rows[0] || {};
 
-            // Obtener historial y formatearlo como el objeto JSON de 'usuarios'
-            // Ordenamos ASC para que el reverse() del frontend muestre el más reciente primero
+            // Obtener historial y formatearlo
             const historyRes = await pool.query('SELECT * FROM historial_juegos WHERE jugador_codigo = $1 ORDER BY fecha ASC', [codigo]);
 
             const unifiedUser = {
@@ -304,7 +331,7 @@ app.post('/api/recuperar', async (req, res) => {
 
     try {
         const result = await pool.query(
-            'SELECT * FROM usuarios WHERE LOWER(nombre) = LOWER($1) AND LOWER(apellido) = LOWER($2)',
+            'SELECT * FROM jugadores WHERE LOWER(nombre) = LOWER($1) AND LOWER(apellido) = LOWER($2)',
             [nombre, apellido]
         );
 
@@ -315,6 +342,23 @@ app.post('/api/recuperar', async (req, res) => {
         }
     } catch (err) {
         console.error(err);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
+
+// Eliminar usuario
+app.delete('/api/usuario/:codigo', async (req, res) => {
+    const { codigo } = req.params;
+    try {
+        const result = await pool.query('DELETE FROM jugadores WHERE codigo = $1 RETURNING *', [codigo]);
+
+        if (result.rowCount > 0) {
+            res.json({ message: 'Usuario eliminado correctamente', usuario: result.rows[0] });
+        } else {
+            res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+    } catch (err) {
+        console.error('Error eliminando usuario:', err);
         res.status(500).json({ error: 'Error interno del servidor' });
     }
 });

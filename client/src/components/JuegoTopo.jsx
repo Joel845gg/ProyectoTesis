@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import fondo from '../assets/Fondo.png';
+import fondo from '../assets/AtrapaTopo.png';
 import topoImg from '../assets/juego3/topo.png';
 import { playSound } from '../utils/sound';
 
@@ -14,6 +14,7 @@ const JuegoTopo = ({ onVolver, usuario }) => {
     const [etapa, setEtapa] = useState('seleccion'); // seleccion, jugando, resumen
     const [dificultad, setDificultad] = useState(null);
     const [puntuacion, setPuntuacion] = useState(0);
+    const [errores, setErrores] = useState(0); // Nuevo estado para errores (trampas)
     const [tiempo, setTiempo] = useState(60);
     const [grid, setGrid] = useState([]); // Array de estados para cada celda
     const [gridSize, setGridSize] = useState(3);
@@ -34,6 +35,7 @@ const JuegoTopo = ({ onVolver, usuario }) => {
         setGridSize(conf.size);
         setPuntuacion(0);
         setPuntuacion(0);
+        setErrores(0); // Reset errores
         setTiempo(35);
         setEtapa('jugando');
 
@@ -73,7 +75,8 @@ const JuegoTopo = ({ onVolver, usuario }) => {
                             juego: 'Topo',
                             dificultad: difNombre,
                             puntuacion: puntuacion,
-                            tiempo_jugado: 60 - prev // Deberia ser casi 60
+                            tiempo_jugado: 60 - prev, // Deberia ser casi 60
+                            errores: errores // Envia la cantidad de trampas activadas
                         }).catch(err => console.error("Error guardando resultado:", err));
                     }
 
@@ -131,6 +134,7 @@ const JuegoTopo = ({ onVolver, usuario }) => {
             setGrid(newGrid);
         } else if (item === 'trampa') {
             setPuntuacion(prev => Math.max(0, prev - 5));
+            setErrores(prev => prev + 1); // Contar error
             const newGrid = [...grid];
             newGrid[index] = 'boom'; // Estado temporal de trampa activada
             setGrid(newGrid);

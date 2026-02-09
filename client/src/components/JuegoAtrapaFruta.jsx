@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import fondo from '../assets/Fondo.png';
+import fondo from '../assets/AtrapaFruta.png';
 // Imágenes Juego 2
 import fresa from '../assets/juego1/fresa.png'; // Fresa no está en juego2, usaremos de juego1 o eliminamos si no se quiere
 import naranja from '../assets/juego2/naranja.png';
@@ -24,7 +24,8 @@ const JuegoAtrapaFruta = ({ onVolver, usuario }) => {
         objetos: [],
         lastSpawn: 0,
         keys: { ArrowLeft: false, ArrowRight: false },
-        score: 0
+        score: 0,
+        errores: 0 // Track bombs caught
     });
 
     const requestRef = useRef();
@@ -49,7 +50,8 @@ const JuegoAtrapaFruta = ({ onVolver, usuario }) => {
             objetos: [],
             lastSpawn: 0,
             keys: { ArrowLeft: false, ArrowRight: false },
-            score: 0
+            score: 0,
+            errores: 0
         };
         setEtapa('jugando');
     };
@@ -147,6 +149,9 @@ const JuegoAtrapaFruta = ({ onVolver, usuario }) => {
 
                 if (enAltura && enAncho) {
                     gameState.current.score += obj.valor;
+                    if (obj.tipo === 'bomba') {
+                        gameState.current.errores += 1;
+                    }
                     setPuntuacion(gameState.current.score);
                     return false;
                 }
@@ -173,7 +178,8 @@ const JuegoAtrapaFruta = ({ onVolver, usuario }) => {
                             juego: 'Atrapar',
                             dificultad: difNombre,
                             puntuacion: puntuacion,
-                            tiempo_jugado: 60 - t
+                            tiempo_jugado: 60 - t,
+                            errores: gameState.current.errores
                         }).catch(err => console.error("Error guardando resultado:", err));
                     }
 

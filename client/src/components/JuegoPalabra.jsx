@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import fondo from '../assets/Fondo.png';
+import fondo from '../assets/CompletaPalabra.png';
 import { playSound } from '../utils/sound';
 
 // Importar imágenes
@@ -87,12 +87,14 @@ const JuegoPalabra = ({ onVolver, usuario }) => {
     const [huecos, setHuecos] = useState([]); // Array de objetos { letra: char, ocupado: boolean }
     const [mensaje, setMensaje] = useState('');
     const [puntuacion, setPuntuacion] = useState(0);
+    const [errores, setErrores] = useState(0);
     const [tiempo, setTiempo] = useState(35); // Nuevo estado de tiempo
 
     const iniciarJuego = (nivel) => {
         setDificultad(nivel);
         setIndicePalabra(0);
         setPuntuacion(0);
+        setErrores(0);
         setTiempo(35); // 35 segundos para todas las dificultades
         cargarPalabra(nivel, 0);
         setEtapa('jugando');
@@ -113,7 +115,8 @@ const JuegoPalabra = ({ onVolver, usuario }) => {
                                 juego: 'Completar',
                                 dificultad: dificultad.charAt(0).toUpperCase() + dificultad.slice(1),
                                 puntuacion: puntuacion,
-                                tiempo_jugado: 35 - prev // Tiempo total (35) menos restante
+                                tiempo_jugado: 35 - prev, // Tiempo total (35) menos restante
+                                errores: errores
                             }).catch(err => console.error("Error guardando resultado:", err));
                         }
 
@@ -203,6 +206,7 @@ const JuegoPalabra = ({ onVolver, usuario }) => {
             }, 1000); // Esperar 1s para ver el mensaje
         } else {
             setMensaje('¡Casi! Inténtalo de nuevo');
+            setErrores(prev => prev + 1);
             // Opcional: Auto-resetear letras incorrectas despues de un tiempo?
             // Por ahora dejamos que el usuario las quite
         }
