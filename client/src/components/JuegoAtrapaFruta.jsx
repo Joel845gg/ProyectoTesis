@@ -120,15 +120,15 @@ const JuegoAtrapaFruta = ({ onVolver, usuario }) => {
                     y: -10,
                     tipo: tipoElegido,
                     img: frutasImgs[Math.floor(Math.random() * frutasImgs.length)],
-                    valor: 10
+                    valor: 1
                 };
 
                 if (tipoElegido === 'dorada') {
                     nuevoObj.img = doradaImg;
-                    nuevoObj.valor = 20;
+                    nuevoObj.valor = 2;
                 } else if (tipoElegido === 'bomba') {
                     nuevoObj.img = bombaImg;
-                    nuevoObj.valor = -20;
+                    nuevoObj.valor = -2;
                 }
 
                 gameState.current.objetos.push(nuevoObj);
@@ -177,7 +177,7 @@ const JuegoAtrapaFruta = ({ onVolver, usuario }) => {
                             codigo: usuario.codigo,
                             juego: 'Atrapar',
                             dificultad: difNombre,
-                            puntuacion: puntuacion,
+                            puntuacion: gameState.current.score,
                             tiempo_jugado: 60 - t,
                             errores: gameState.current.errores
                         }).catch(err => console.error("Error guardando resultado:", err));

@@ -34,7 +34,7 @@ const JuegoMemoria = ({ onVolver, usuario }) => {
         dificil: { pares: 9, cols: 6 }
     };
 
-    const [tiempo, setTiempo] = useState(35); // 35 segundos límite
+    const [tiempo, setTiempo] = useState(0); // Tiempo transcurrido
     const timerRef = React.useRef(null);
 
     const iniciarJuego = (nivel) => {
@@ -50,20 +50,13 @@ const JuegoMemoria = ({ onVolver, usuario }) => {
         setCartasVolteadas([]);
         setParejasEncontradas([]);
         setIntentos(0);
-        setTiempo(35);
+        setTiempo(0);
         setEtapa('jugando');
 
         // Iniciar Timer
         if (timerRef.current) clearInterval(timerRef.current);
         timerRef.current = setInterval(() => {
-            setTiempo((prev) => {
-                if (prev <= 1) {
-                    clearInterval(timerRef.current);
-                    finalizarJuego(false, 35); // Tiempo agotado
-                    return 0;
-                }
-                return prev - 1;
-            });
+            setTiempo((prev) => prev + 1);
         }, 1000);
     };
 
@@ -75,7 +68,7 @@ const JuegoMemoria = ({ onVolver, usuario }) => {
                 codigo: usuario.codigo,
                 juego: 'Parejas',
                 dificultad: dificultad.charAt(0).toUpperCase() + dificultad.slice(1),
-                puntuacion: completado ? (1000 - (intentos * 10)) : (parejasEncontradas.length * 50), // Puntos parciales si pierde
+                puntuacion: (completado ? (1000 - (intentos * 10)) : (parejasEncontradas.length * 50)) / 100, // Puntos parciales si pierde
                 tiempo_jugado: tiempoJugado,
                 errores: intentos // En memoria, los intentos cuentan como "fallos" o esfuerzo
             }).catch(err => console.error("Error guardando resultado:", err));
@@ -105,7 +98,7 @@ const JuegoMemoria = ({ onVolver, usuario }) => {
                 // Verificar Victoria
                 if (nuevasParejas.length === config[dificultad].pares) {
                     clearInterval(timerRef.current);
-                    finalizarJuego(true, 35 - tiempo); // Tiempo que tardó
+                    finalizarJuego(true, tiempo); // Tiempo que tardó
                 }
             } else {
                 setTimeout(() => {
@@ -247,7 +240,7 @@ const JuegoMemoria = ({ onVolver, usuario }) => {
                 zIndex: 100
             }}>
                 <h2 style={{ color: '#333', margin: 0, fontSize: '1.8rem' }}>Intentos: {intentos}</h2>
-                <h2 style={{ color: tiempo < 10 ? '#f44336' : '#333', margin: 0, fontSize: '1.8rem' }}>Tiempo: {tiempo}s</h2>
+                <h2 style={{ color: '#333', margin: 0, fontSize: '1.8rem' }}>Tiempo: {tiempo}s</h2>
                 <button
                     onClick={() => { playSound('click'); setEtapa('seleccion'); }}
                     onMouseEnter={() => playSound('hover')}

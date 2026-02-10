@@ -89,11 +89,13 @@ const JuegoPalabra = ({ onVolver, usuario }) => {
     const [puntuacion, setPuntuacion] = useState(0);
     const [errores, setErrores] = useState(0);
     const [tiempo, setTiempo] = useState(35); // Nuevo estado de tiempo
+    const scoreRef = React.useRef(0);
 
     const iniciarJuego = (nivel) => {
         setDificultad(nivel);
         setIndicePalabra(0);
         setPuntuacion(0);
+        scoreRef.current = 0;
         setErrores(0);
         setTiempo(35); // 35 segundos para todas las dificultades
         cargarPalabra(nivel, 0);
@@ -114,7 +116,7 @@ const JuegoPalabra = ({ onVolver, usuario }) => {
                                 codigo: usuario.codigo,
                                 juego: 'Completar',
                                 dificultad: dificultad.charAt(0).toUpperCase() + dificultad.slice(1),
-                                puntuacion: puntuacion,
+                                puntuacion: scoreRef.current,
                                 tiempo_jugado: 35 - prev, // Tiempo total (35) menos restante
                                 errores: errores
                             }).catch(err => console.error("Error guardando resultado:", err));
@@ -198,7 +200,11 @@ const JuegoPalabra = ({ onVolver, usuario }) => {
         const palabraFormada = huecosLlenos.map(h => h.letra).join('');
         if (palabraFormada === palabraCorrecta) {
             setMensaje('¡CORRECTO!');
-            setPuntuacion(p => p + 10);
+            setPuntuacion(p => {
+                const newScore = p + 1;
+                scoreRef.current = newScore;
+                return newScore;
+            });
             setTimeout(() => {
                 const nuevoIndice = indicePalabra + 1;
                 setIndicePalabra(nuevoIndice);

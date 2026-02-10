@@ -16,6 +16,10 @@ const JuegoTopo = ({ onVolver, usuario }) => {
     const [puntuacion, setPuntuacion] = useState(0);
     const [errores, setErrores] = useState(0); // Nuevo estado para errores (trampas)
     const [tiempo, setTiempo] = useState(60);
+
+    // Refs para evitar stale closure en el intervalo
+    const scoreRef = useRef(0);
+    const errorsRef = useRef(0);
     const [grid, setGrid] = useState([]); // Array de estados para cada celda
     const [gridSize, setGridSize] = useState(3);
 
@@ -35,7 +39,9 @@ const JuegoTopo = ({ onVolver, usuario }) => {
         setGridSize(conf.size);
         setPuntuacion(0);
         setPuntuacion(0);
-        setErrores(0); // Reset errores
+        scoreRef.current = 0;
+        setErrores(0);
+        errorsRef.current = 0;
         setTiempo(35);
         setEtapa('jugando');
 
@@ -74,9 +80,9 @@ const JuegoTopo = ({ onVolver, usuario }) => {
                             codigo: usuario.codigo,
                             juego: 'Topo',
                             dificultad: difNombre,
-                            puntuacion: puntuacion,
+                            puntuacion: scoreRef.current,
                             tiempo_jugado: 60 - prev, // Deberia ser casi 60
-                            errores: errores // Envia la cantidad de trampas activadas
+                            errores: errorsRef.current // Envia la cantidad de trampas activadas
                         }).catch(err => console.error("Error guardando resultado:", err));
                     }
 
@@ -127,14 +133,26 @@ const JuegoTopo = ({ onVolver, usuario }) => {
 
         const item = grid[index];
         if (item === 'topo') {
-            setPuntuacion(prev => prev + 10);
+            setPuntuacion(prev => {
+                const newScore = prev + 1;
+                scoreRef.current = newScore;
+                return newScore;
+            });
             // Efecto visual de golpe? (opcional: limpiar celda instantáneo)
             const newGrid = [...grid];
             newGrid[index] = 'hit'; // Estado temporal de golpe
             setGrid(newGrid);
         } else if (item === 'trampa') {
-            setPuntuacion(prev => Math.max(0, prev - 5));
-            setErrores(prev => prev + 1); // Contar error
+            setPuntuacion(prev => {
+                const newScore = Math.max(0, prev - 1);
+                scoreRef.current = newScore;
+                return newScore;
+            });
+            setErrores(prev => {
+                const newErrors = prev + 1;
+                errorsRef.current = newErrors;
+                return newErrors;
+            });
             const newGrid = [...grid];
             newGrid[index] = 'boom'; // Estado temporal de trampa activada
             setGrid(newGrid);
@@ -223,7 +241,7 @@ const JuegoTopo = ({ onVolver, usuario }) => {
                                     <span style={{ fontSize: '3rem' }}>💣</span>
                                 )}
                                 {cell === 'hit' && (
-                                    <span style={{ fontSize: '3rem', color: 'white', fontWeight: 'bold' }}>+10</span>
+                                    <span style={{ fontSize: '3rem', color: 'white', fontWeight: 'bold' }}>+1</span>
                                 )}
                                 {cell === 'boom' && (
                                     <span style={{ fontSize: '3rem' }}>💥</span>

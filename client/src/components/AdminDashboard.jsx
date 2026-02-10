@@ -3,7 +3,9 @@ import axios from 'axios';
 import fondo from '../assets/Fondo.png';
 import { playSound } from '../utils/sound';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { Users, Gamepad2, Trophy, LogOut, TrendingUp, Award, Brain } from 'lucide-react';
+import { jsPDF } from "jspdf";
+import autoTable from 'jspdf-autotable';
+import { Users, Gamepad2, Trophy, LogOut, TrendingUp, Award, Brain, Eye, Download } from 'lucide-react';
 
 const AdminDashboard = ({ onVolver }) => {
     const [jugadores, setJugadores] = useState([]);
@@ -99,6 +101,250 @@ const AdminDashboard = ({ onVolver }) => {
         }
     ] : [];
 
+    const [mostrarModalEvaluacion, setMostrarModalEvaluacion] = useState(false);
+    const [evaluacionData, setEvaluacionData] = useState({
+        codigo: '',
+        nombreJugador: '',
+        tipo: 'inicial', // 'inicial' | 'final'
+        paso: 1, // 1: Codigo, 2: Cuestionario
+        respuestas: {} // { A1: 5, A2: 4 ... }
+    });
+
+    const preguntas = {
+        A: [
+            "Me distraigo fácilmente cuando realizo una actividad.",
+            "Puedo mantener la atención durante varios minutos sin perder el foco.",
+            "Me resulta difícil concentrarme cuando hay estímulos alrededor.",
+            "Logro terminar una tarea sin abandonarla antes de tiempo."
+        ],
+        B: [
+            "Recuerdo palabras o información que acabo de ver o escuchar.",
+            "Olvido rápidamente lo que estaba haciendo.",
+            "Puedo recordar la ubicación de objetos o imágenes vistas recientemente.",
+            "Me cuesta relacionar información nueva con la que ya conozco."
+        ],
+        C: [
+            "Reacciono rápidamente ante estímulos visuales.",
+            "Siento que respondo con lentitud cuando debo actuar rápido.",
+            "Me coordino bien al usar mis manos frente a una pantalla."
+        ]
+    };
+
+    const handleBuscarJugador = async () => {
+        try {
+            const res = await axios.get(`http://localhost:3000/api/usuario/${evaluacionData.codigo}`);
+            setEvaluacionData(prev => ({ ...prev, nombreJugador: `${res.data.nombre} ${res.data.apellido}`, paso: 2 }));
+        } catch (err) {
+            alert("Jugador no encontrado");
+        }
+    };
+
+    const handleRespuestaChange = (seccion, indice, valor) => {
+        setEvaluacionData(prev => ({
+            ...prev,
+            respuestas: { ...prev.respuestas, [`${seccion}${indice}`]: parseInt(valor) }
+        }));
+    };
+
+    const calcularTotales = () => {
+        // Sumar respuestas por sección
+        let atencion = 0, memoria = 0, reaccion = 0;
+        Object.keys(evaluacionData.respuestas).forEach(key => {
+            const val = evaluacionData.respuestas[key];
+            if (key.startsWith('A')) atencion += val;
+            if (key.startsWith('B')) memoria += val;
+            if (key.startsWith('C')) reaccion += val;
+        });
+        return { atencion, memoria, reaccion };
+    };
+
+    const handleGuardarEvaluacion = async () => {
+        const totales = calcularTotales();
+        try {
+            await axios.post('http://localhost:3000/api/admin/evaluacion', {
+                codigo: evaluacionData.codigo,
+                tipo: evaluacionData.tipo,
+                respuestas: totales
+            });
+            setMostrarModalEvaluacion(false);
+            setEvaluacionData({ codigo: '', nombreJugador: '', tipo: 'inicial', paso: 1, respuestas: {} });
+
+            // Recargar datos
+            const [prepostJugadoresRes, prepostStatsRes] = await Promise.all([
+                axios.get('http://localhost:3000/api/admin/prepost/jugadores'),
+                axios.get('http://localhost:3000/api/admin/prepost/stats')
+            ]);
+            setPrepostJugadores(prepostJugadoresRes.data);
+            setPrepostStats(prepostStatsRes.data);
+
+            alert("Evaluación guardada correctamente");
+        } catch (err) {
+            console.error(err);
+            alert("Error al guardar evaluación");
+        }
+    };
+
+    const [modalIndividual, setModalIndividual] = useState(null);
+
+    const generarRecomendacion = (jugador) => {
+        const mAtencion = parseInt(jugador.mejora_atencion);
+        const mMemoria = parseInt(jugador.mejora_memoria);
+        const mReaccion = parseInt(jugador.mejora_reaccion);
+        const total = mAtencion + mMemoria + mReaccion;
+
+        // Identificar áreas
+        const areas = [
+            { nombre: 'Atención', valor: mAtencion },
+            { nombre: 'Memoria', valor: mMemoria },
+            { nombre: 'Reacción', valor: mReaccion }
+        ];
+
+        // Ordenar de menor a mayor mejora
+        areas.sort((a, b) => a.valor - b.valor);
+        const areaMenor = areas[0];
+        const areaMayor = areas[2];
+
+        if (mAtencion < 0 || mMemoria < 0 || mReaccion < 0) {
+            return `Se ha detectado un descenso en el rendimiento de ${areaMenor.nombre}. Es fundamental priorizar ejercicios de esta área para recuperar y fortalecer la capacidad. Mantén la constancia para revertir esta tendencia.`;
+        } else if (total > 8) {
+            return `¡Resultados excepcionales! El jugador ha demostrado un crecimiento notable en todas las áreas, destacando especialmente en ${areaMayor.nombre}. Se recomienda aumentar el nivel de dificultad para seguir desafiando sus capacidades cognitivas.`;
+        } else if (total >= 4) {
+            return `Buen progreso general. Se observa una evolución positiva y equilibrada. Para maximizar el rendimiento, se sugiere enfocar las próximas sesiones en ${areaMenor.nombre}, que presenta un margen de mejora mayor.`;
+        } else {
+            return `Desempeño estable. Aunque se mantienen las capacidades, el crecimiento es moderado. Se recomienda aumentar la frecuencia de las sesiones y variar los tipos de juegos para estimular una mayor plasticidad neuronal.`;
+        }
+    };
+
+    const generarPDF = (jugador) => {
+        const doc = new jsPDF();
+
+
+        // --- Header ---
+        doc.setFontSize(22);
+        doc.setTextColor(65, 84, 255); // Blue #4154FF
+        doc.text("INTEGRA COGNITIVA", 15, 20);
+
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text("Reporte de Resultados Pre vs Post", 15, 26);
+
+        // Player Info (Right aligned)
+        doc.setFontSize(14);
+        doc.setTextColor(0);
+        doc.text(`${jugador.nombre}`, 195, 20, { align: 'right' });
+        doc.setFontSize(10);
+        doc.text(`ID: ${jugador.codigo}`, 195, 26, { align: 'right' });
+
+        // Line Separator
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(15, 30, 195, 30);
+
+        // --- Table Section ---
+        doc.setFontSize(12);
+        doc.setTextColor(0);
+        doc.text("EVOLUCIÓN DE CAPACIDADES", 15, 45);
+
+        autoTable(doc, {
+            startY: 50,
+            head: [['Categoría', 'Pre-Test', 'Post-Test', 'Mejora']],
+            body: [
+                ['Atención', jugador.atencion_inicial, jugador.atencion_final, jugador.mejora_atencion],
+                ['Memoria', jugador.memoria_inicial, jugador.memoria_final, jugador.mejora_memoria],
+                ['Reacción', jugador.reaccion_inicial, jugador.reaccion_final, jugador.mejora_reaccion],
+            ],
+            theme: 'grid',
+            headStyles: { fillColor: [20, 24, 35], textColor: 255 }, // Dark header
+            columnStyles: {
+                0: { cellWidth: 80 },
+                3: { fontStyle: 'bold', textColor: [0, 128, 0] } // Green for improvement (simplified)
+            },
+            didParseCell: function (data) {
+                if (data.section === 'body' && data.column.index === 3) {
+                    const val = parseInt(data.cell.raw);
+                    if (val > 0) {
+                        data.cell.text = `+${val}`;
+                        data.cell.styles.textColor = [46, 204, 113]; // Green
+                    } else if (val < 0) {
+                        data.cell.styles.textColor = [231, 76, 60]; // Red
+                    } else {
+                        data.cell.styles.textColor = [0, 0, 0]; // Black
+                    }
+                }
+            }
+        });
+
+        // --- Chart Section ---
+        let finalY = doc.lastAutoTable.finalY + 15;
+        doc.text("COMPARATIVA VISUAL (GRIS: INICIAL | AZUL: FINAL)", 15, finalY);
+
+        const startChartY = finalY + 10;
+        const barHeight = 8;
+        const gap = 15;
+        const maxScore = 20; // Assuming max score is 20 for scaling (5 questions * 4? No, 4 questions * 5 = 20. Wait, Section C has 3 questions. Let's assume scale is max possible score. A=20, B=20, C=15. Let's normalize or just use fixed width).
+        // Max possible scores: A=20, B=20, C=15. Let's use 20 as 100% width (approx 140 units).
+        const maxWidth = 130;
+        const scale = maxWidth / 20;
+
+        const drawBar = (label, scorePre, scorePost, y) => {
+            doc.setFontSize(9);
+            doc.setTextColor(80);
+            doc.text(label.toUpperCase(), 15, y + 6);
+
+            // Bar Background (optional, maybe not needed)
+
+            // Pre Bar (Gray)
+            const widthPre = scorePre * scale;
+            doc.setFillColor(160, 160, 160); // Gray
+            doc.roundedRect(45, y, widthPre, barHeight, 2, 2, 'F');
+
+            // Post Bar (Blue) - Draw below or overlay? The image looks like separate bars or overlaid. 
+            // If I draw it slightly offset or below? Let's draw it just below the gray one for clarity, or overlapping if requested.
+            // User said: "GRIS: INICIAL | AZUL: FINAL". Let's put Blue UNDER Gray visually? Or stacked? 
+            // Let's do: Gray bar on top, Blue bar on bottom? No, image typically shows side by side or one over another.
+            // Let's put Blue slightly lower (overlapping) or just below.
+            // Let's try: Gray at y, Blue at y + 5 (overlapping).
+
+            const widthPost = scorePost * scale;
+            doc.setFillColor(65, 84, 255); // Blue
+            doc.roundedRect(45, y + 4, widthPost, barHeight, 2, 2, 'F');
+        };
+
+        drawBar("ATENCION", jugador.atencion_inicial, jugador.atencion_final, startChartY);
+        drawBar("MEMORIA", jugador.memoria_inicial, jugador.memoria_final, startChartY + gap);
+        drawBar("REACCION", jugador.reaccion_inicial, jugador.reaccion_final, startChartY + gap * 2);
+
+        // --- Recommendation Section ---
+        const recY = startChartY + gap * 3 + 10;
+
+        doc.setDrawColor(65, 84, 255);
+        doc.setLineWidth(1);
+        doc.roundedRect(15, recY, 180, 40, 3, 3); // Border container
+
+        // Background fill for recommendation (very light blue)
+        doc.setFillColor(240, 242, 255);
+        doc.roundedRect(15, recY, 180, 40, 3, 3, 'F');
+
+        // Blue strip on left
+        doc.setFillColor(65, 84, 255);
+        doc.roundedRect(15, recY, 2, 40, 1, 1, 'F');
+
+        doc.setFontSize(11);
+        doc.setTextColor(65, 84, 255);
+        doc.text("RECOMENDACIÓN PROFESIONAL:", 25, recY + 10);
+
+        doc.setFontSize(10);
+        doc.setTextColor(60);
+
+        // Generate dynamic recommendation
+        const recomendacion = generarRecomendacion(jugador);
+
+        const splitText = doc.splitTextToSize(recomendacion, 160);
+        doc.text(splitText, 25, recY + 18);
+
+        doc.save(`Reporte_Cognitivo_${jugador.nombre}_${jugador.codigo}.pdf`);
+    };
+
     return (
         <div className="pantalla-completa" style={{ backgroundImage: `url(${fondo})`, overflowY: 'auto' }}>
             <div style={{
@@ -114,19 +360,36 @@ const AdminDashboard = ({ onVolver }) => {
                         <h1 style={{ color: '#2c3e50', margin: 0, fontSize: '2.5rem' }}>Panel de Control</h1>
                         <p style={{ color: '#7f8c8d', margin: '5px 0 0 0' }}>Monitoreo y Análisis Cognitivo</p>
                     </div>
-                    <button
-                        onClick={() => { playSound('click'); onVolver(); }}
-                        onMouseEnter={() => playSound('hover')}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: '10px',
-                            padding: '12px 25px', backgroundColor: '#e74c3c', color: 'white',
-                            border: 'none', borderRadius: '12px', cursor: 'pointer',
-                            fontWeight: 'bold', fontSize: '1rem',
-                            boxShadow: '0 4px 6px rgba(231, 76, 60, 0.3)'
-                        }}
-                    >
-                        <LogOut size={20} /> Cerrar Sesión
-                    </button>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        {tabActiva === 'prepost' && (
+                            <button
+                                onClick={() => { playSound('click'); setMostrarModalEvaluacion(true); }}
+                                onMouseEnter={() => playSound('hover')}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: '10px',
+                                    padding: '12px 25px', backgroundColor: '#9b59b6', color: 'white',
+                                    border: 'none', borderRadius: '12px', cursor: 'pointer',
+                                    fontWeight: 'bold', fontSize: '1rem',
+                                    boxShadow: '0 4px 6px rgba(155, 89, 182, 0.3)'
+                                }}
+                            >
+                                <Brain size={20} /> Nueva Evaluación
+                            </button>
+                        )}
+                        <button
+                            onClick={() => { playSound('click'); onVolver(); }}
+                            onMouseEnter={() => playSound('hover')}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: '10px',
+                                padding: '12px 25px', backgroundColor: '#e74c3c', color: 'white',
+                                border: 'none', borderRadius: '12px', cursor: 'pointer',
+                                fontWeight: 'bold', fontSize: '1rem',
+                                boxShadow: '0 4px 6px rgba(231, 76, 60, 0.3)'
+                            }}
+                        >
+                            <LogOut size={20} /> Cerrar Sesión
+                        </button>
+                    </div>
                 </div>
 
                 {/* Tabs */}
@@ -261,7 +524,7 @@ const AdminDashboard = ({ onVolver }) => {
                                                         {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`}
                                                     </td>
                                                     <td style={tdStyle}>{jugador.nombre} {jugador.apellido}</td>
-                                                    <td style={{ ...tdStyle, fontWeight: 'bold', color: '#27ae60' }}>{jugador.mejor_puntuacion_global}</td>
+                                                    <td style={tdStyle}>{jugador.mejor_puntuacion_global}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -399,6 +662,7 @@ const AdminDashboard = ({ onVolver }) => {
                                                     <th style={thStyle} colSpan="2">Memoria</th>
                                                     <th style={thStyle} colSpan="2">Reacción</th>
                                                     <th style={thStyle}>Mejoras</th>
+                                                    <th style={thStyle}>Acciones</th>
                                                 </tr>
                                                 <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #e9ecef' }}>
                                                     <th style={thStyle}></th>
@@ -410,6 +674,7 @@ const AdminDashboard = ({ onVolver }) => {
                                                     <th style={{ ...thStyle, fontSize: '0.8rem' }}>Inicial</th>
                                                     <th style={{ ...thStyle, fontSize: '0.8rem' }}>Final</th>
                                                     <th style={{ ...thStyle, fontSize: '0.8rem' }}>A/M/R</th>
+                                                    <th style={thStyle}></th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -428,6 +693,37 @@ const AdminDashboard = ({ onVolver }) => {
                                                         <td style={{ ...tdStyle, textAlign: 'center', color: '#27ae60', fontWeight: 'bold' }}>{jugador.reaccion_final}</td>
                                                         <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 'bold', color: '#3498db' }}>
                                                             +{jugador.mejora_atencion}/+{jugador.mejora_memoria}/+{jugador.mejora_reaccion}
+                                                        </td>
+                                                        <td style={tdStyle}>
+                                                            <div style={{ display: 'flex', gap: '5px' }}>
+                                                                <button
+                                                                    onClick={() => setModalIndividual(jugador)}
+                                                                    title="Ver Informe Individual"
+                                                                    style={{
+                                                                        padding: '5px 10px',
+                                                                        backgroundColor: '#34495e',
+                                                                        color: 'white',
+                                                                        border: 'none',
+                                                                        borderRadius: '5px',
+                                                                        cursor: 'pointer'
+                                                                    }}
+                                                                >
+                                                                    <Eye size={16} />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => generarPDF(jugador)}
+                                                                    style={{
+                                                                        padding: '5px 10px',
+                                                                        backgroundColor: '#e67e22',
+                                                                        color: 'white',
+                                                                        border: 'none',
+                                                                        borderRadius: '5px',
+                                                                        cursor: 'pointer'
+                                                                    }}
+                                                                >
+                                                                    <Download size={16} />
+                                                                </button>
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -489,6 +785,242 @@ const AdminDashboard = ({ onVolver }) => {
                                     <p style={{ color: '#7f8c8d', fontStyle: 'italic' }}>No hay partidas registradas.</p>
                                 )}
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal Nueva Evaluación */}
+                {mostrarModalEvaluacion && (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
+                    }}>
+                        <div style={{
+                            backgroundColor: 'white', padding: '30px', borderRadius: '15px', width: '90%', maxWidth: '700px',
+                            maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 5px 30px rgba(0,0,0,0.3)'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                                <h2 style={{ margin: 0, color: '#9b59b6' }}>Nueva Evaluación Cognitiva</h2>
+                                <button
+                                    onClick={() => setMostrarModalEvaluacion(false)}
+                                    style={{ border: 'none', background: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#7f8c8d' }}
+                                >
+                                    ✖
+                                </button>
+                            </div>
+
+                            {evaluacionData.paso === 1 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '8px', color: '#34495e', fontWeight: 'bold' }}>Código del Jugador:</label>
+                                        <div style={{ display: 'flex', gap: '10px' }}>
+                                            <input
+                                                type="text"
+                                                value={evaluacionData.codigo}
+                                                onChange={(e) => setEvaluacionData({ ...evaluacionData, codigo: e.target.value })}
+                                                placeholder="Ej: 1234"
+                                                style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #bdc3c7', fontSize: '1.1rem' }}
+                                            />
+                                            <button
+                                                onClick={handleBuscarJugador}
+                                                style={{
+                                                    padding: '10px 20px', backgroundColor: '#3498db', color: 'white',
+                                                    border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold'
+                                                }}
+                                            >
+                                                Buscar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                    <div style={{ padding: '15px', backgroundColor: '#f0f3f6', borderRadius: '8px' }}>
+                                        <p style={{ margin: 0, color: '#2c3e50', fontWeight: 'bold' }}>Jugador: <span style={{ color: '#2980b9' }}>{evaluacionData.nombreJugador}</span></p>
+                                    </div>
+
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '8px', color: '#34495e', fontWeight: 'bold' }}>Tipo de Evaluación:</label>
+                                        <select
+                                            value={evaluacionData.tipo}
+                                            onChange={(e) => setEvaluacionData({ ...evaluacionData, tipo: e.target.value })}
+                                            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #bdc3c7', fontSize: '1.1rem' }}
+                                        >
+                                            <option value="inicial">Evaluación Inicial (Pre)</option>
+                                            <option value="final">Evaluación Final (Post)</option>
+                                        </select>
+                                    </div>
+
+                                    <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #eee', padding: '15px', borderRadius: '8px' }}>
+                                        {['A', 'B', 'C'].map(seccion => (
+                                            <div key={seccion} style={{ marginBottom: '20px' }}>
+                                                <h4 style={{ color: '#e67e22', borderBottom: '2px solid #fcebb6', paddingBottom: '5px' }}>
+                                                    {seccion === 'A' ? 'Sección A – Atención y Concentración' :
+                                                        seccion === 'B' ? 'Sección B – Memoria' : 'Sección C – Velocidad de reacción y respuesta'}
+                                                </h4>
+                                                {preguntas[seccion].map((pregunta, i) => (
+                                                    <div key={i} style={{ marginBottom: '15px', paddingBottom: '10px', borderBottom: '1px dashed #eee' }}>
+                                                        <p style={{ margin: '0 0 10px 0', fontSize: '0.95rem' }}>{pregunta}</p>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', maxWidth: '300px' }}>
+                                                            {[1, 2, 3, 4, 5].map(val => (
+                                                                <label key={val} style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                                    <input
+                                                                        type="radio"
+                                                                        name={`${seccion}${i}`}
+                                                                        value={val}
+                                                                        checked={evaluacionData.respuestas[`${seccion}${i}`] === val}
+                                                                        onChange={(e) => handleRespuestaChange(seccion, i, e.target.value)}
+                                                                        style={{ marginBottom: '5px' }}
+                                                                    />
+                                                                    <span style={{ fontSize: '0.8rem', color: '#7f8c8d' }}>{val}</span>
+                                                                </label>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
+                                        <button
+                                            onClick={() => setEvaluacionData(prev => ({ ...prev, paso: 1 }))}
+                                            style={{
+                                                padding: '10px 20px', backgroundColor: '#95a5a6', color: 'white',
+                                                border: 'none', borderRadius: '8px', cursor: 'pointer'
+                                            }}
+                                        >
+                                            Atrás
+                                        </button>
+                                        <button
+                                            onClick={handleGuardarEvaluacion}
+                                            style={{
+                                                padding: '10px 20px', backgroundColor: '#27ae60', color: 'white',
+                                                border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold'
+                                            }}
+                                        >
+                                            Guardar Evaluación
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal Análisis Individual */}
+                {modalIndividual && (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100
+                    }}>
+                        <div style={{
+                            backgroundColor: 'white', padding: '40px', borderRadius: '20px', width: '90%', maxWidth: '800px',
+                            maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '30px' }}>
+                                <div>
+                                    <h2 style={{ margin: 0, color: '#2c3e50', fontSize: '1.8rem' }}>Análisis Individual</h2>
+                                    <p style={{ margin: '5px 0 0 0', color: '#7f8c8d' }}>Jugador: <strong>{modalIndividual.nombre}</strong> (ID: {modalIndividual.codigo})</p>
+                                </div>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <button
+                                        onClick={() => generarPDF(modalIndividual)}
+                                        style={{
+                                            padding: '8px 15px', backgroundColor: '#e67e22', color: 'white',
+                                            border: 'none', borderRadius: '8px', cursor: 'pointer', display: 'flex', gap: '5px', alignItems: 'center'
+                                        }}
+                                    >
+                                        <Download size={16} /> PDF
+                                    </button>
+                                    <button
+                                        onClick={() => setModalIndividual(null)}
+                                        style={{ border: 'none', background: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#95a5a6' }}
+                                    >
+                                        ✖
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Contenido Visual */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginBottom: '30px' }}>
+                                {/* Tabla Resumen */}
+                                <div style={{ backgroundColor: '#f9f9f9', padding: '20px', borderRadius: '12px' }}>
+                                    <h3 style={{ marginTop: 0, color: '#34495e', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>Evolución</h3>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                        <thead>
+                                            <tr>
+                                                <th style={{ textAlign: 'left', padding: '8px', color: '#7f8c8d', fontSize: '0.9rem' }}>Categoría</th>
+                                                <th style={{ textAlign: 'center', padding: '8px', color: '#7f8c8d', fontSize: '0.9rem' }}>Pre</th>
+                                                <th style={{ textAlign: 'center', padding: '8px', color: '#7f8c8d', fontSize: '0.9rem' }}>Post</th>
+                                                <th style={{ textAlign: 'center', padding: '8px', color: '#7f8c8d', fontSize: '0.9rem' }}>Dif</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {['Atencion', 'Memoria', 'Reaccion'].map(cat => {
+                                                const pre = modalIndividual[`${cat.toLowerCase()}_inicial`];
+                                                const post = modalIndividual[`${cat.toLowerCase()}_final`];
+                                                const diff = modalIndividual[`mejora_${cat.toLowerCase()}`];
+                                                return (
+                                                    <tr key={cat} style={{ borderBottom: '1px solid #eee' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold', color: '#2c3e50' }}>{cat}</td>
+                                                        <td style={{ padding: '8px', textAlign: 'center', color: '#7f8c8d' }}>{pre}</td>
+                                                        <td style={{ padding: '8px', textAlign: 'center', color: '#2c3e50', fontWeight: 'bold' }}>{post}</td>
+                                                        <td style={{ padding: '8px', textAlign: 'center', color: diff > 0 ? '#27ae60' : '#e74c3c', fontWeight: 'bold' }}>
+                                                            {diff > 0 ? '+' : ''}{diff}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {/* Gráfico Simple (Barras CSS) */}
+                                <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid #eee' }}>
+                                    <h3 style={{ marginTop: 0, color: '#34495e', marginBottom: '20px' }}>Comparativa Visual</h3>
+                                    {['Atencion', 'Memoria', 'Reaccion'].map(cat => {
+                                        const pre = modalIndividual[`${cat.toLowerCase()}_inicial`];
+                                        const post = modalIndividual[`${cat.toLowerCase()}_final`];
+                                        // Escala simple: Max 20 puntos = 100%
+                                        const pPre = (pre / 20) * 100;
+                                        const pPost = (post / 20) * 100;
+
+                                        return (
+                                            <div key={cat} style={{ marginBottom: '15px' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '5px', color: '#7f8c8d' }}>
+                                                    <span>{cat.toUpperCase()}</span>
+                                                </div>
+                                                <div style={{ position: 'relative', height: '20px', backgroundColor: '#ecf0f1', borderRadius: '10px', overflow: 'hidden' }}>
+                                                    {/* Barra Pre (Gris) */}
+                                                    <div style={{
+                                                        position: 'absolute', top: 0, left: 0, height: '100%', width: `${pPre}%`,
+                                                        backgroundColor: '#bdc3c7', opacity: 0.7
+                                                    }} title={`Inicial: ${pre}`}></div>
+                                                    {/* Barra Post (Azul - superpuesta o abajo? Hagamos superpuesta con opacidad o más fina) */}
+                                                    <div style={{
+                                                        position: 'absolute', bottom: 0, left: 0, height: '50%', width: `${pPost}%`,
+                                                        backgroundColor: '#3498db', zIndex: 2
+                                                    }} title={`Final: ${post}`}></div>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#95a5a6', marginTop: '2px' }}>
+                                                    <span>Pre: {pre}</span>
+                                                    <span>Post: {post}</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Recomendación */}
+                            <div style={{ backgroundColor: '#f0f2ff', padding: '20px', borderRadius: '12px', borderLeft: '5px solid #4154ff' }}>
+                                <h4 style={{ margin: '0 0 10px 0', color: '#4154ff' }}>RECOMENDACIÓN PROFESIONAL:</h4>
+                                <p style={{ margin: 0, color: '#34495e', lineHeight: '1.5' }}>
+                                    {generarRecomendacion(modalIndividual)}
+                                </p>
+                            </div>
+
                         </div>
                     </div>
                 )}

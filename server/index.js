@@ -206,6 +206,74 @@ app.get('/api/admin/prepost/stats', async (req, res) => {
     }
 });
 
+// Endpoint: Guardar Evaluación Manual (Pre/Post)
+app.post('/api/admin/evaluacion', async (req, res) => {
+    const { codigo, tipo, respuestas } = req.body;
+    // respuestas = { A: 12, B: 15, C: 10 } (Sumas ya calculadas o array de respuestas)
+    // El frontend enviará los puntajes totales por sección: atencion, memoria, reaccion
+
+    if (!codigo || !tipo || !respuestas) {
+        return res.status(400).json({ error: 'Faltan datos requeridos' });
+    }
+
+    try {
+        // 1. Asegurar que el jugador existe en prepost_jugadores
+        // Primero buscamos si existe en tabla master 'jugadores'
+        const playerMaster = await pool.query('SELECT * FROM jugadores WHERE codigo = $1', [codigo]);
+        if (playerMaster.rowCount === 0) {
+            return res.status(404).json({ error: 'Jugador no encontrado en el sistema.' });
+        }
+
+        const { nombre, apellido } = playerMaster.rows[0];
+        const nombreCompleto = `${nombre} ${apellido}`;
+
+        // Verificar/Insertar en prepost_jugadores
+        await pool.query(`
+            INSERT INTO prepost_jugadores (codigo, nombre)
+            VALUES ($1, $2)
+            ON CONFLICT (codigo) DO NOTHING
+        `, [codigo, nombreCompleto]);
+
+        // 2. Insertar/Actualizar Evaluación
+        // tipo debe ser 'inicial' o 'final'
+        await pool.query(`
+            INSERT INTO prepost_evaluaciones (jugador_codigo, tipo, atencion, memoria, reaccion)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (jugador_codigo, tipo) 
+            DO UPDATE SET atencion = $3, memoria = $4, reaccion = $5
+        `, [codigo, tipo, respuestas.atencion, respuestas.memoria, respuestas.reaccion]);
+
+        // 3. Recalcular Mejoras (Si existen ambas)
+        const evaluaciones = await pool.query(`
+            SELECT tipo, atencion, memoria, reaccion 
+            FROM prepost_evaluaciones 
+            WHERE jugador_codigo = $1
+        `, [codigo]);
+
+        const inicial = evaluaciones.rows.find(e => e.tipo === 'inicial');
+        const final = evaluaciones.rows.find(e => e.tipo === 'final');
+
+        if (inicial && final) {
+            const mejoraAtencion = final.atencion - inicial.atencion;
+            const mejoraMemoria = final.memoria - inicial.memoria;
+            const mejoraReaccion = final.reaccion - inicial.reaccion;
+
+            await pool.query(`
+                INSERT INTO prepost_mejoras (jugador_codigo, atencion, memoria, reaccion)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (jugador_codigo)
+                DO UPDATE SET atencion = $2, memoria = $3, reaccion = $4
+            `, [codigo, mejoraAtencion, mejoraMemoria, mejoraReaccion]);
+        }
+
+        res.json({ message: 'Evaluación guardada correctamente' });
+
+    } catch (err) {
+        console.error("Error guardando evaluación:", err);
+        res.status(500).json({ error: 'Error al guardar evaluación' });
+    }
+});
+
 // Guardar resultado de juego
 app.post('/api/guardar-resultado', async (req, res) => {
     const { codigo, juego, dificultad, puntuacion, tiempo_jugado, errores } = req.body;
