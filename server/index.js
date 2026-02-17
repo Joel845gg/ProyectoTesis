@@ -2,21 +2,24 @@ const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const path = require('path');
+require('dotenv').config();
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
 
 // Configuración de PostgreSQL
+const isProduction = process.env.NODE_ENV === 'production';
+
+const connectionString = process.env.DATABASE_URL || `postgresql://postgres:postgres26@localhost:5432/juegotesis`;
+
 const pool = new Pool({
-    user: 'postgres',
-    host: 'localhost',
-    database: 'juegotesis',
-    password: 'postgres26',
-    port: 5432,
+    connectionString: isProduction ? process.env.DATABASE_URL : connectionString,
+    ssl: isProduction ? { rejectUnauthorized: false } : false
 });
 
 // Función para generar código único
@@ -467,6 +470,16 @@ app.get('/api/admin/dashboard-stats', async (req, res) => {
     }
 });
 
-app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
+// Servir archivos estáticos del frontend en producción
+if (process.env.NODE_ENV === 'production') {
+    app.use(express.static(path.join(__dirname, '../client/dist')));
+
+    app.get('*', (req, res) => {
+        res.sendFile(path.join(__dirname, '../client/dist', 'index.html'));
+    });
+}
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });
