@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "render-build": "npm install && cd ../client && npm install && npm run build"
+    "render-build": "npm install && cd ../client && npm install --include=dev && npm run build"
   },
   "keywords": [],
   "author": "",
