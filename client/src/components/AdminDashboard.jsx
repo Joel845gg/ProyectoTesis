@@ -514,19 +514,31 @@ const AdminDashboard = ({ onVolver }) => {
                                             <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #e9ecef' }}>
                                                 <th style={thStyle}>Posición</th>
                                                 <th style={thStyle}>Jugador</th>
+                                                <th style={thStyle}>Juego / Dificultad</th>
                                                 <th style={thStyle}>Puntuación</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {mejoresPuntuaciones.map((jugador, index) => (
-                                                <tr key={jugador.codigo} style={{ borderBottom: '1px solid #e9ecef' }}>
+                                            {stats?.top5?.map((record, index) => (
+                                                <tr key={index} style={{ borderBottom: '1px solid #e9ecef' }}>
                                                     <td style={{ ...tdStyle, textAlign: 'center', fontSize: '1.5rem' }}>
                                                         {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`}
                                                     </td>
-                                                    <td style={tdStyle}>{jugador.nombre} {jugador.apellido}</td>
-                                                    <td style={tdStyle}>{jugador.mejor_puntuacion_global}</td>
+                                                    <td style={tdStyle}>{record.nombre} {record.apellido}</td>
+                                                    <td style={tdStyle}>
+                                                        <span style={{ fontWeight: 'bold', color: '#34495e' }}>{record.juego}</span>
+                                                        <span style={{ color: '#7f8c8d', fontSize: '0.9rem', marginLeft: '5px' }}>({record.dificultad})</span>
+                                                    </td>
+                                                    <td style={{ ...tdStyle, fontWeight: 'bold', color: '#27ae60' }}>{record.puntuacion}</td>
                                                 </tr>
                                             ))}
+                                            {!stats?.top5?.length && (
+                                                <tr>
+                                                    <td colSpan="4" style={{ padding: '20px', textAlign: 'center', color: '#95a5a6' }}>
+                                                        Aún no hay puntuaciones registradas.
+                                                    </td>
+                                                </tr>
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>

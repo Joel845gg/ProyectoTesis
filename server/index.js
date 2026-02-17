@@ -458,10 +458,20 @@ app.get('/api/admin/dashboard-stats', async (req, res) => {
                 (SELECT COUNT(*) FROM historial_juegos) as total_partidas
         `);
 
+        // 4. Top 5 Mejores Puntuaciones (Con detalle de juego)
+        const top5Res = await pool.query(`
+            SELECT j.nombre, j.apellido, mp.juego, mp.dificultad, mp.puntuacion
+            FROM mejores_puntuaciones mp
+            JOIN jugadores j ON mp.jugador_codigo = j.codigo
+            ORDER BY mp.puntuacion DESC
+            LIMIT 5
+        `);
+
         res.json({
             juegos: juegosRes.rows,
             puntajes: puntajeRes.rows,
-            generales: totalesRes.rows[0]
+            generales: totalesRes.rows[0],
+            top5: top5Res.rows
         });
 
     } catch (err) {
