@@ -378,7 +378,8 @@ app.get('/api/usuario/:codigo', async (req, res) => {
                     dificultad: h.dificultad,
                     puntuacion: parseFloat(h.puntuacion),
                     fecha: h.fecha,
-                    tiempo_jugado: h.tiempo_jugado
+                    tiempo_jugado: h.tiempo_jugado,
+                    errores: h.errores || 0
                 }))
             };
 
@@ -458,12 +459,12 @@ app.get('/api/admin/dashboard-stats', async (req, res) => {
                 (SELECT COUNT(*) FROM historial_juegos) as total_partidas
         `);
 
-        // 4. Top 5 Mejores Puntuaciones (Con detalle de juego)
+        // 4. Top 5 Mejores Puntuaciones (Usando historial para asegurar datos)
         const top5Res = await pool.query(`
-            SELECT j.nombre, j.apellido, mp.juego, mp.dificultad, mp.puntuacion
-            FROM mejores_puntuaciones mp
-            JOIN jugadores j ON mp.jugador_codigo = j.codigo
-            ORDER BY mp.puntuacion DESC
+            SELECT j.nombre, j.apellido, h.juego, h.dificultad, h.puntuacion
+            FROM historial_juegos h
+            JOIN jugadores j ON h.jugador_codigo = j.codigo
+            ORDER BY CAST(h.puntuacion AS FLOAT) DESC
             LIMIT 5
         `);
 

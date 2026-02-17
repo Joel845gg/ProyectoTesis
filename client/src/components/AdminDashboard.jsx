@@ -776,6 +776,7 @@ const AdminDashboard = ({ onVolver }) => {
                                             <tr style={{ backgroundColor: '#f8f9fa' }}>
                                                 <th style={{ padding: '10px', textAlign: 'left' }}>Juego</th>
                                                 <th style={{ padding: '10px', textAlign: 'left' }}>Dificultad</th>
+                                                <th style={{ padding: '10px', textAlign: 'center' }}>Errores</th>
                                                 <th style={{ padding: '10px', textAlign: 'right' }}>Puntos</th>
                                                 <th style={{ padding: '10px', textAlign: 'right' }}>Fecha</th>
                                             </tr>
@@ -785,7 +786,10 @@ const AdminDashboard = ({ onVolver }) => {
                                                 <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
                                                     <td style={{ padding: '10px' }}>{partida.juego}</td>
                                                     <td style={{ padding: '10px' }}>{partida.dificultad}</td>
-                                                    <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60' }}>{partida.puntuacion}</td>
+                                                    <td style={{ padding: '10px', textAlign: 'center', color: '#e74c3c' }}>{partida.errores}</td>
+                                                    <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60' }}>
+                                                        {partida.juego === 'Parejas' ? Math.round(partida.puntuacion) : partida.puntuacion}
+                                                    </td>
                                                     <td style={{ padding: '10px', textAlign: 'right', fontSize: '0.9rem', color: '#7f8c8d' }}>
                                                         {new Date(partida.fecha).toLocaleDateString()}
                                                     </td>
