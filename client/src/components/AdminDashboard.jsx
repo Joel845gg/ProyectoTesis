@@ -19,10 +19,10 @@ const AdminDashboard = ({ onVolver }) => {
         const fetchData = async () => {
             try {
                 const [usersRes, statsRes, prepostJugadoresRes, prepostStatsRes] = await Promise.all([
-                    axios.get('http://localhost:3000/api/admin/stats'),
-                    axios.get('http://localhost:3000/api/admin/dashboard-stats'),
-                    axios.get('http://localhost:3000/api/admin/prepost/jugadores'),
-                    axios.get('http://localhost:3000/api/admin/prepost/stats')
+                    axios.get('/api/admin/stats'),
+                    axios.get('/api/admin/dashboard-stats'),
+                    axios.get('/api/admin/prepost/jugadores'),
+                    axios.get('/api/admin/prepost/stats')
                 ]);
                 setJugadores(usersRes.data);
                 setStats(statsRes.data);
@@ -50,7 +50,7 @@ const AdminDashboard = ({ onVolver }) => {
 
     const verDetalles = async (codigo) => {
         try {
-            const res = await axios.get(`http://localhost:3000/api/usuario/${codigo}`);
+            const res = await axios.get(`/api/usuario/${codigo}`);
             setJugadorSeleccionado(res.data);
         } catch (err) {
             console.error("Error cargando detalles", err);
@@ -59,9 +59,9 @@ const AdminDashboard = ({ onVolver }) => {
 
     const handleEliminar = async (codigo) => {
         try {
-            await axios.delete(`http://localhost:3000/api/usuario/${codigo}`);
+            await axios.delete(`/api/usuario/${codigo}`);
             setJugadores(prev => prev.filter(j => j.codigo !== codigo));
-            const statsRes = await axios.get('http://localhost:3000/api/admin/dashboard-stats');
+            const statsRes = await axios.get('/api/admin/dashboard-stats');
             setStats(statsRes.data);
         } catch (err) {
             console.error("Error eliminando jugador", err);
@@ -132,7 +132,7 @@ const AdminDashboard = ({ onVolver }) => {
 
     const handleBuscarJugador = async () => {
         try {
-            const res = await axios.get(`http://localhost:3000/api/usuario/${evaluacionData.codigo}`);
+            const res = await axios.get(`/api/usuario/${evaluacionData.codigo}`);
             setEvaluacionData(prev => ({ ...prev, nombreJugador: `${res.data.nombre} ${res.data.apellido}`, paso: 2 }));
         } catch (err) {
             alert("Jugador no encontrado");
@@ -161,7 +161,7 @@ const AdminDashboard = ({ onVolver }) => {
     const handleGuardarEvaluacion = async () => {
         const totales = calcularTotales();
         try {
-            await axios.post('http://localhost:3000/api/admin/evaluacion', {
+            await axios.post('/api/admin/evaluacion', {
                 codigo: evaluacionData.codigo,
                 tipo: evaluacionData.tipo,
                 respuestas: totales
@@ -171,8 +171,8 @@ const AdminDashboard = ({ onVolver }) => {
 
             // Recargar datos
             const [prepostJugadoresRes, prepostStatsRes] = await Promise.all([
-                axios.get('http://localhost:3000/api/admin/prepost/jugadores'),
-                axios.get('http://localhost:3000/api/admin/prepost/stats')
+                axios.get('/api/admin/prepost/jugadores'),
+                axios.get('/api/admin/prepost/stats')
             ]);
             setPrepostJugadores(prepostJugadoresRes.data);
             setPrepostStats(prepostStatsRes.data);

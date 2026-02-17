@@ -173,7 +173,7 @@ const JuegoAtrapaFruta = ({ onVolver, usuario }) => {
                     if (usuario && usuario.codigo) {
                         const difNombre = dificultad.charAt(0).toUpperCase() + dificultad.slice(1);
                         // Usamos 'Atrapar' como nombre del juego basado en JSON ejemplo
-                        axios.post('http://localhost:3000/api/guardar-resultado', {
+                        axios.post('/api/guardar-resultado', {
                             codigo: usuario.codigo,
                             juego: 'Atrapar',
                             dificultad: difNombre,

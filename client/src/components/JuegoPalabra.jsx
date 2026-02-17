@@ -112,7 +112,7 @@ const JuegoPalabra = ({ onVolver, usuario }) => {
 
                         // Guardar resultado cuando se acaba el tiempo
                         if (usuario && usuario.codigo) {
-                            axios.post('http://localhost:3000/api/guardar-resultado', {
+                            axios.post('/api/guardar-resultado', {
                                 codigo: usuario.codigo,
                                 juego: 'Completar',
                                 dificultad: dificultad.charAt(0).toUpperCase() + dificultad.slice(1),

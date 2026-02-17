@@ -76,7 +76,7 @@ const JuegoTopo = ({ onVolver, usuario }) => {
                         // Ajustar nombre dificultad
                         const difNombre = dificultad.charAt(0).toUpperCase() + dificultad.slice(1);
 
-                        axios.post('http://localhost:3000/api/guardar-resultado', {
+                        axios.post('/api/guardar-resultado', {
                             codigo: usuario.codigo,
                             juego: 'Topo',
                             dificultad: difNombre,
