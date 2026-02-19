@@ -768,39 +768,153 @@ const AdminDashboard = ({ onVolver }) => {
                                 </button>
                             </div>
 
-                            <h3 style={{ color: '#34495e', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>Historial de Juegos</h3>
-                            <div style={{ marginTop: '15px' }}>
-                                {jugadorSeleccionado.historial_juegos && typeof jugadorSeleccionado.historial_juegos === 'object' && jugadorSeleccionado.historial_juegos.length > 0 ? (
-                                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                        <thead>
-                                            <tr style={{ backgroundColor: '#f8f9fa' }}>
-                                                <th style={{ padding: '10px', textAlign: 'left' }}>Juego</th>
-                                                <th style={{ padding: '10px', textAlign: 'left' }}>Dificultad</th>
-                                                <th style={{ padding: '10px', textAlign: 'center' }}>Errores</th>
-                                                <th style={{ padding: '10px', textAlign: 'right' }}>Puntos</th>
-                                                <th style={{ padding: '10px', textAlign: 'right' }}>Fecha</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {[...jugadorSeleccionado.historial_juegos].reverse().map((partida, i) => (
-                                                <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
-                                                    <td style={{ padding: '10px' }}>{partida.juego}</td>
-                                                    <td style={{ padding: '10px' }}>{partida.dificultad}</td>
-                                                    <td style={{ padding: '10px', textAlign: 'center', color: '#e74c3c' }}>{partida.errores}</td>
-                                                    <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60' }}>
-                                                        {partida.juego === 'Parejas' ? Math.round(partida.puntuacion) : partida.puntuacion}
-                                                    </td>
-                                                    <td style={{ padding: '10px', textAlign: 'right', fontSize: '0.9rem', color: '#7f8c8d' }}>
-                                                        {new Date(partida.fecha).toLocaleDateString()}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                ) : (
-                                    <p style={{ color: '#7f8c8d', fontStyle: 'italic' }}>No hay partidas registradas.</p>
-                                )}
-                            </div>
+                            {/* 
+                                CONTENIDO DEL DASHBOARD INDIVIDUAL 
+                                Implementación de los 5 Indicadores: 
+                                1. Puntaje por actividad (Gráfico de Línea)
+                                2. Número de errores (Gráfico de Barras)
+                                3. Frecuencia de uso (Gráfico de Barras por Fecha)
+                                4. Tiempo de respuesta (Gráfico de Área/Línea)
+                                5. Nivel alcanzado (Tarjetas de Dificultad Máxima)
+                            */}
+                            {(() => {
+                                const historial = jugadorSeleccionado.historial_juegos || [];
+
+                                if (historial.length === 0) {
+                                    return <p style={{ color: '#7f8c8d', fontStyle: 'italic', textAlign: 'center', padding: '20px' }}>No hay partidas registradas para este jugador.</p>;
+                                }
+
+                                // --- PROCESAMIENTO DE DATOS ---
+
+                                // 1. Datos para Gráficos de Evolución (Puntaje, Errores, Tiempo)
+                                const datosEvolucion = historial.map((p, i) => ({
+                                    intento: i + 1,
+                                    fecha: new Date(p.fecha).toLocaleDateString(),
+                                    puntaje: parseFloat(p.puntuacion),
+                                    errores: parseInt(p.errores || 0),
+                                    tiempo: parseInt(p.tiempo_jugado || 0),
+                                    juego: p.juego,
+                                    dificultad: p.dificultad
+                                }));
+
+                                // 2. Datos para Frecuencia de Uso (Por Fecha)
+                                const frecuenciaMap = historial.reduce((acc, curr) => {
+                                    const fecha = new Date(curr.fecha).toLocaleDateString();
+                                    acc[fecha] = (acc[fecha] || 0) + 1;
+                                    return acc;
+                                }, {});
+                                const datosFrecuencia = Object.keys(frecuenciaMap).map(fecha => ({
+                                    fecha,
+                                    partidas: frecuenciaMap[fecha]
+                                }));
+
+                                // 3. Nivel Alcanzado (Máxima dificultad por juego)
+                                const nivelesPosibles = { 'Facil': 1, 'Medio': 2, 'Dificil': 3, 'Media': 2 }; // 'Media' corrección por si acaso
+                                const nivelesMap = {};
+
+                                historial.forEach(p => {
+                                    const nivelActual = nivelesPosibles[p.dificultad] || 0;
+                                    const nivelGuardado = nivelesMap[p.juego] ? nivelesPosibles[nivelesMap[p.juego]] : 0;
+
+                                    if (nivelActual >= nivelGuardado) {
+                                        nivelesMap[p.juego] = p.dificultad;
+                                    }
+                                });
+
+                                return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
+
+                                        {/* INDICADOR 5: NIVEL ALCANZADO */}
+                                        <div style={{ backgroundColor: '#f9f9f9', padding: '20px', borderRadius: '12px' }}>
+                                            <h3 style={{ color: '#2c3e50', marginTop: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <TrendingUp size={24} color="#e67e22" /> Nivel Máximo Alcanzado
+                                            </h3>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
+                                                {Object.keys(nivelesMap).map(juego => (
+                                                    <div key={juego} style={{
+                                                        backgroundColor: 'white', padding: '15px', borderRadius: '10px',
+                                                        boxShadow: '0 2px 10px rgba(0,0,0,0.05)', textAlign: 'center',
+                                                        borderBottom: `4px solid ${nivelesMap[juego] === 'Dificil' ? '#e74c3c' :
+                                                            nivelesMap[juego] === 'Medio' || nivelesMap[juego] === 'Media' ? '#f39c12' : '#2ecc71'
+                                                            }`
+                                                    }}>
+                                                        <h4 style={{ margin: '0 0 5px 0', color: '#34495e' }}>{juego}</h4>
+                                                        <span style={{
+                                                            fontSize: '1.2rem', fontWeight: 'bold',
+                                                            color: nivelesMap[juego] === 'Dificil' ? '#c0392b' : '#27ae60'
+                                                        }}>
+                                                            {nivelesMap[juego].toUpperCase()}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+
+                                            {/* INDICADOR 1: PUNTAJE POR ACTIVIDAD */}
+                                            <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 15px rgba(0,0,0,0.05)' }}>
+                                                <h4 style={{ margin: '0 0 15px 0', color: '#3498db' }}>1. Evolución de Puntaje</h4>
+                                                <ResponsiveContainer width="100%" height={250}>
+                                                    <LineChart data={datosEvolucion}>
+                                                        <CartesianGrid strokeDasharray="3 3" />
+                                                        <XAxis dataKey="intento" label={{ value: 'Partidas', position: 'insideBottomRight', offset: -5 }} />
+                                                        <YAxis />
+                                                        <Tooltip />
+                                                        <Legend />
+                                                        <Line type="monotone" dataKey="puntaje" stroke="#3498db" strokeWidth={2} name="Puntaje" dot={{ r: 3 }} />
+                                                    </LineChart>
+                                                </ResponsiveContainer>
+                                            </div>
+
+                                            {/* INDICADOR 2: NÚMERO DE ERRORES */}
+                                            <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 15px rgba(0,0,0,0.05)' }}>
+                                                <h4 style={{ margin: '0 0 15px 0', color: '#e74c3c' }}>2. Historial de Errores</h4>
+                                                <ResponsiveContainer width="100%" height={250}>
+                                                    <BarChart data={datosEvolucion}>
+                                                        <CartesianGrid strokeDasharray="3 3" />
+                                                        <XAxis dataKey="intento" />
+                                                        <YAxis allowDecimals={false} />
+                                                        <Tooltip />
+                                                        <Legend />
+                                                        <Bar dataKey="errores" fill="#e74c3c" name="Errores Cometidos" radius={[4, 4, 0, 0]} />
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            </div>
+
+                                        </div>
+
+                                        {/* TABLA DE HISTORIAL ORIGINAL (Como referencia detallada) */}
+                                        <div style={{ marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
+                                            <h4 style={{ color: '#7f8c8d' }}>Detalle de Partidas (Referencia)</h4>
+                                            <div style={{ overflowX: 'auto', maxHeight: '300px' }}>
+                                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                                                    <thead>
+                                                        <tr style={{ backgroundColor: '#f8f9fa' }}>
+                                                            <th style={{ padding: '10px', textAlign: 'left' }}>Juego</th>
+                                                            <th style={{ padding: '10px', textAlign: 'left' }}>Dificultad</th>
+                                                            <th style={{ padding: '10px', textAlign: 'center' }}>Errores</th>
+                                                            <th style={{ padding: '10px', textAlign: 'right' }}>Puntos</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {[...historial].reverse().map((partida, i) => (
+                                                            <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                                                                <td style={{ padding: '10px' }}>{partida.juego}</td>
+                                                                <td style={{ padding: '10px' }}>{partida.dificultad}</td>
+                                                                <td style={{ padding: '10px', textAlign: 'center', color: '#e74c3c' }}>{partida.errores}</td>
+                                                                <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60' }}>
+                                                                    {partida.juego === 'Parejas' ? Math.round(partida.puntuacion) : partida.puntuacion}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
                     </div>
                 )}
