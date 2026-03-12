@@ -1,5 +1,7 @@
 # Manual de Instalación y Despliegue - Juego Tesis
 
+**Repositorio del Proyecto:** [Joel845gg/ProyectoTesis](https://github.com/Joel845gg/ProyectoTesis.git)
+
 Este proyecto está dividido en dos partes principales: un **Frontend** desarrollado en React (Vite) y un **Backend** desarrollado en Node.js (Express) con PostgreSQL como base de datos.
 
 ## Estructura del Proyecto
